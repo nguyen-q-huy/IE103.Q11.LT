@@ -33,6 +33,9 @@ export default function LuotKhamBacSiChart() {
   const [data, setData] = useState<BacSiStat[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // State tìm kiếm cho bảng
+  const [searchTerm, setSearchTerm] = useState('');
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -50,6 +53,11 @@ export default function LuotKhamBacSiChart() {
     fetchData();
   }, [year]);
 
+  // Lọc data theo searchTerm (bỏ qua chữ hoa/thường)
+  const filteredData = data.filter(item =>
+    item.TenBacSi.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const colors = [
     'rgba(255, 99, 132, 0.7)',
     'rgba(54, 162, 235, 0.7)',
@@ -63,15 +71,14 @@ export default function LuotKhamBacSiChart() {
     'rgba(99, 255, 132, 0.7)'
   ];
 
-
-  const backgroundColors = data.map((_, index) => colors[index % colors.length]);
+  const backgroundColors = filteredData.map((_, index) => colors[index % colors.length]);
 
   const chartData = {
-    labels: data.map(item => item.TenBacSi),
+    labels: filteredData.map(item => item.TenBacSi),
     datasets: [
       {
-        label: ``,
-        data: data.map(item => item.LuotKham),
+        label: '',
+        data: filteredData.map(item => item.LuotKham),
         backgroundColor: backgroundColors,
         borderColor: backgroundColors.map(color => color.replace('0.7', '1')),
         borderWidth: 1
@@ -82,7 +89,7 @@ export default function LuotKhamBacSiChart() {
   const options = {
     responsive: true,
     plugins: {
-      legend: { display: false, },
+      legend: { display: false },
       title: {
         display: true,
         text: `Thống kê lượt khám theo bác sĩ năm ${year}`
@@ -99,7 +106,7 @@ export default function LuotKhamBacSiChart() {
   return (
     <div>
       <div className="max-w-5xl mx-auto mt-10 p-4">
-        <div className="mb-4 flex items-center gap-4">
+        <div className="mb-4 flex items-center gap-4 flex-wrap">
           <label htmlFor="year-select" className="font-semibold">
             Chọn năm:
           </label>
@@ -109,43 +116,56 @@ export default function LuotKhamBacSiChart() {
             onChange={(e) => setYear(parseInt(e.target.value))}
             className="border border-gray-300 rounded p-1"
           >
-            {getYearsRange(2010, currentYear).reverse().map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
+            {getYearsRange(2010, currentYear)
+              .reverse()
+              .map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
           </select>
           {loading && <span className="ml-4 text-gray-500">Đang tải...</span>}
         </div>
 
         <Bar data={chartData} options={options} />
 
-      </div>
-      {/* Bảng thống kê dưới biểu đồ */}
-      <table className="min-w-full border border-gray-300 rounded-lg overflow-hidden shadow-md">
-        <thead className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white">
-          <tr>
-            <th className="py-3 px-4 text-center uppercase tracking-wider">Bác sĩ</th>
-            <th className="py-3 px-4 text-center uppercase tracking-wider">Lượt khám</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.length === 0 && (
-            <tr>
-              <td colSpan={2} className="text-center p-4">
-                Không có dữ liệu năm {year}
-              </td>
-            </tr>
-          )}
-          {data.map((item) => (
-            <tr key={item.TenBacSi}>
-              <td className="py-2 px-4 border-b border-gray-200">{item.TenBacSi}</td>
-              <td className="py-2 px-4 border-b border-gray-200 text-center">{item.LuotKham}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        {/* Input tìm kiếm cho bảng */}
+        <div className="mt-6 mb-4">
+          <input
+            type="text"
+            placeholder="Tìm kiếm bác sĩ..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full max-w-sm p-2 border border-gray-300 rounded shadow-sm"
+          />
+        </div>
 
+        {/* Bảng thống kê lượt khám */}
+        <table className="min-w-full border border-gray-300 rounded-lg overflow-hidden shadow-md">
+          <thead className="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white">
+            <tr>
+              <th className="py-3 px-4 text-center uppercase tracking-wider">Bác sĩ</th>
+              <th className="py-3 px-4 text-center uppercase tracking-wider">Lượt khám</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.length === 0 ? (
+              <tr>
+                <td colSpan={2} className="text-center p-4">
+                  Không có dữ liệu cho tìm kiếm "{searchTerm}" năm {year}
+                </td>
+              </tr>
+            ) : (
+              filteredData.map((item) => (
+                <tr key={item.TenBacSi}>
+                  <td className="py-2 px-4 border-b border-gray-200">{item.TenBacSi}</td>
+                  <td className="py-2 px-4 border-b border-gray-200 text-center">{item.LuotKham}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

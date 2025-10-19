@@ -4,26 +4,31 @@ import sql from 'mssql';
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const ngay = searchParams.get('ngay');
-  const maBS = searchParams.get('maBS'); // tùy chọn
+  const q = searchParams.get('q')?.toLowerCase() || '';
 
-  try {
-    const db = await getConnection();
+  const db = await getConnection();
+  const request = db.request();
 
-    let query = 'SELECT MaLichKham, NgayKham, TenBenhNhan, NgaySinh,TenBacSi FROM '
-        + 'LichKham L '
-        + 'INNER JOIN BacSi B ON L.MaBacSi = B.MaBacSi '
-        + 'INNER JOIN BenhNhan N ON L.MaBenhNhan = N.MaBenhNhan '
-        + 'WHERE NgayKham = @Ngay';
-    const request = db.request().input('Ngay', sql.Date, new Date(ngay!));
+  let query = `
+    SELECT MaLichKham, NgayKham, TenBenhNhan, NgaySinh, TenBacSi
+    FROM LichKham L
+    INNER JOIN BacSi B ON B.MaBacSi = L.MaBacSi
+    INNER JOIN BenhNhan BN ON BN.MaBenhNhan = BN.MaBenhNhan
+    WHERE CONVERT(date, NgayKham) = @ngay
+  `;
 
-    if (maBS && maBS !== '0') {
-      query += ' AND MaBacSi = @MaBS';
-      request.input('MaBS', sql.Int, Number(maBS));
-    }
+  request.input('ngay', sql.Date, ngay);
 
-    const result = await request.query(query);
-    return new Response(JSON.stringify(result.recordset), { status: 200 });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (q) {
+    query += `
+      AND (
+        LOWER(TenBenhNhan) LIKE '%' + @q + '%' OR
+        LOWER(TenBacSi) LIKE '%' + @q + '%'
+      )
+    `;
+    request.input('q', sql.NVarChar, q);
   }
+
+  const result = await request.query(query);
+  return new Response(JSON.stringify(result.recordset), { status: 200 });
 }

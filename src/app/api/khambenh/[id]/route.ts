@@ -6,7 +6,8 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const maLichKham = parseInt(params.id, 10);
+  const { id } = await params;
+  const maLichKham = parseInt(id, 10);
 
   if (isNaN(maLichKham)) {
     return NextResponse.json({ error: 'ID không hợp lệ' }, { status: 400 });

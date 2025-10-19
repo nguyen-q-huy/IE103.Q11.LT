@@ -7,8 +7,8 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const menuItems = [
+    { name: 'Danh Sách Bệnh Nhân', href: '/benhnhan' },
     { name: 'Lịch khám', href: '/' },
-    { name: 'Khám bệnh', href: '/khambenh' },
     { name: 'Thống kê', href: '/thongke' },
   ];
 
