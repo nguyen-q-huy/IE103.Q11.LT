@@ -12,6 +12,29 @@ export default function Sidebar() {
     { name: 'Thống kê', href: '/thongke' },
   ];
 
+    // Hàm gọi API và tải file JSON về
+  async function handleExport() {
+    try {
+      const res = await fetch('/api/export');
+      if (!res.ok) throw new Error('Lỗi khi tải dữ liệu');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      // Tạo thẻ <a> để tải file
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'data.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('Xuất dữ liệu thất bại: ' + error.message);
+    }
+  }
+
   return (
     <aside className="w-80 bg-white fixed top-0 left-0 h-screen border-r p-4 shadow-sm z-10">
       <h2 className="text-2xl font-bold mb-6 tracking-tight">
@@ -39,6 +62,17 @@ export default function Sidebar() {
             </li>
           );
         })}
+
+        {/* Nút Xuất JSON */}
+        <li>
+          <button
+            onClick={handleExport}
+            className="w-full text-left flex items-center px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+          >
+            <span className="mr-2">⬇️</span>
+            Xuất dữ liệu JSON
+          </button>
+        </li>
       </ul>
     </aside>
 
