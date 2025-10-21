@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     request.input('DichVu', dvTable);
 
     // Gọi stored procedure
-    await request.execute('CapNhatLichKhamVaChiTiet');
+    await request.execute('sp_CapNhatLichKhamVaChiTiet');
 
     return NextResponse.json({ success: true, message: 'Cập nhật thành công' });
   } catch (error: any) {

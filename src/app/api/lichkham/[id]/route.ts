@@ -50,11 +50,12 @@ export async function POST(req: NextRequest) {
       maLichKham, 
       chanDoan, 
       ghiChu, 
-      thuoc // [{ maThuoc: number, soLuong: number }, ...]
+      thuoc, // [{ maThuoc: number, soLuong: number }, ...]
+      dichVu
     } = await req.json();
 
     // Validate
-    if (!maLichKham || !chanDoan || !ghiChu || !Array.isArray(thuoc)) {
+    if (!maLichKham || !chanDoan || !ghiChu || !Array.isArray(thuoc) || !Array.isArray(dichVu)) {
       return NextResponse.json(
         { error: 'Dữ liệu không hợp lệ hoặc thiếu.' }, 
         { status: 400 }
@@ -65,17 +66,27 @@ export async function POST(req: NextRequest) {
     const request = db.request();
 
     // Tạo TVP (table-valued parameter) cho danh sách thuốc
-    const tvp = new sql.Table();
+    const tvpThuoc = new sql.Table();
 
-    tvp.columns.add('MaThuoc', sql.Int);
-    tvp.columns.add('SoLuong', sql.Int);
+    tvpThuoc.columns.add('MaThuoc', sql.Int);
+    tvpThuoc.columns.add('SoLuong', sql.Int);
 
     for (const t of thuoc) {
       // Chuyển dữ liệu an toàn, có thể kiểm tra ở đây
       const ma = parseInt(t.maThuoc);
       const sl = parseInt(t.soLuong);
       if (!isNaN(ma) && !isNaN(sl)) {
-        tvp.rows.add(ma, sl);
+        tvpThuoc.rows.add(ma, sl);
+      }
+    }
+
+    const tvpDichVu = new sql.Table();
+
+    for (const dv of dichVu) {
+      const ma = parseInt(dv.maDichVu);
+      const sl = parseInt(dv.soLuong);
+      if (!isNaN(ma) && !isNaN(sl)) {
+        tvpDichVu.rows.add(ma, sl);
       }
     }
 
@@ -83,9 +94,10 @@ export async function POST(req: NextRequest) {
       .input('MaLichKham', sql.Int, maLichKham)
       .input('ChanDoan', sql.NVarChar(255), chanDoan)
       .input('GhiChu', sql.NVarChar(255), ghiChu)
-      .input('Thuoc', tvp);
+      .input('Thuoc', tvpThuoc)
+      .input('DichVu', tvpDichVu);
 
-    await request.execute('CapNhatLichKhamVaKeThuoc');
+    await request.execute('sp_CapNhatLichKhamVaChiTiet');
 
     return NextResponse.json({ success: true, message: 'Cập nhật thành công.' });
   } catch (error: any) {

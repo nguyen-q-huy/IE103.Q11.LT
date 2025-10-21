@@ -81,7 +81,6 @@ END;
 
 -- Cursor để in ra report
 
-
 GO
 CREATE PROCEDURE sp_BaoCaoLichKhamTheoMa
     @MaLichKham INT
@@ -163,6 +162,8 @@ BEGIN
     PRINT N'💰 Tổng chi phí: ' + FORMAT(@TongChiPhi, 'N0') + N' VND';
 END;
 GO
+-- Dang Ky Lich Kham
+
 CREATE PROCEDURE sp_DangKyLichKham
     @MaBacSi INT,
     @TenBenhNhan NVARCHAR(100),
@@ -213,7 +214,10 @@ CREATE TYPE DichVuTableType AS TABLE (
     SoLan INT
 );
 GO
-CREATE PROCEDURE CapNhatLichKhamVaChiTiet
+
+-- Cap nhat lich kham va chi tiet
+
+CREATE PROCEDURE sp_CapNhatLichKhamVaChiTiet
 (
     @MaLichKham INT,
     @ChanDoan NVARCHAR(255),
@@ -258,6 +262,9 @@ BEGIN
     END CATCH
 END;
 GO;
+
+-- Procedure Dang Kt
+
 CREATE PROCEDURE sp_DangKyLichKhamTheoBenhNhan
     @MaBenhNhan INT,
     @MaBacSi INT,
@@ -291,3 +298,44 @@ BEGIN
 END
 GO
 
+-- Procedure hỗ trợ lấy thông tin cho in file PDF
+
+CREATE PROCEDURE sp_BaoCaoLichKhamTheoMa_API
+    @MaLichKham INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Thông tin chính của lịch khám (bệnh nhân, bác sĩ, chẩn đoán, ghi chú...)
+    SELECT 
+        lk.MaLichKham,
+        lk.NgayKham,
+        bs.TenBacSi,
+        bn.TenBenhNhan,
+        lk.ChanDoan,
+        lk.GhiChu
+    FROM LichKham lk
+    JOIN BacSi bs ON lk.MaBacSi = bs.MaBacSi
+    JOIN BenhNhan bn ON lk.MaBenhNhan = bn.MaBenhNhan
+    WHERE lk.MaLichKham = @MaLichKham;
+
+    -- 2. Danh sách dịch vụ chỉ định
+    SELECT 
+        cd.MaDichVu,
+        dv.TenDichVu,
+        cd.SoLan,
+        dv.DonGia
+    FROM ChiDinh cd
+    JOIN DichVu dv ON cd.MaDichVu = dv.MaDichVu
+    WHERE cd.MaLichKham = @MaLichKham;
+
+    -- 3. Danh sách thuốc kê
+    SELECT 
+        kt.MaThuoc,
+        t.TenThuoc,
+        kt.SoLuong,
+        t.DonGia
+    FROM KeThuoc kt
+    JOIN Thuoc t ON kt.MaThuoc = t.MaThuoc
+    WHERE kt.MaLichKham = @MaLichKham;
+END;
