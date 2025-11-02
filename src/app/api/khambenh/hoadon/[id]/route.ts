@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getConnection } from '@lib/db';
+import { getConnection } from '@/lib/db';
+import { getMongoConnection } from '@/lib/mongo';
 import sql from 'mssql';
-import { PDFDocument, rgb, PDFPage } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
 import fs from 'fs/promises';
 import path from 'path';
+import { PDFDocument, rgb, PDFPage } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 
 export async function GET(
   request: NextRequest,
@@ -18,26 +19,114 @@ export async function GET(
   }
 
   try {
-    const db = await getConnection();
-    const requestDb = db.request().input('MaLichKham', sql.Int, maLichKhamNum);
-    const result = await requestDb.execute('sp_BaoCaoLichKhamTheoMa_API');
+    const dbType = process.env.DB_TYPE || 'sqlserver';
 
-    const lichKham = result.recordsets ?? [];
-    const tongchiDinh = result.recordsets ?? [];
-    const tongkeThuoc = result.recordsets ?? [];
+    let info: any;
+    let chiDinh: any[] = [];
+    let keThuoc: any[] = [];
 
-    if (lichKham.length === 0) {
-      return NextResponse.json({ error: 'Không tìm thấy lịch khám' }, { status: 404 });
+    if (dbType === 'sqlserver') {
+      const db = await getConnection();
+      const requestDb = db.request().input('MaLichKham', sql.Int, maLichKhamNum);
+      const result = await requestDb.execute('sp_BaoCaoLichKhamTheoMa_API');
+
+      if (!result.recordsets || result.recordsets.length === 0) {
+        return NextResponse.json({ error: 'Không tìm thấy lịch khám' }, { status: 404 });
+      }
+
+      info = result.recordsets[0][0];
+      chiDinh = result.recordsets[1] ?? [];
+      keThuoc = result.recordsets[2] ?? [];
     }
 
-    const info = lichKham[0][0];
-    const chiDinh = tongchiDinh[1] || [];
-    const keThuoc = tongkeThuoc[2] || [];
+    if (dbType === 'mongodb') {
+      const db = await getMongoConnection();
+
+      info = await db.collection('LichKham').aggregate([
+        { $match: { MaLichKham: maLichKhamNum } },
+        {
+          $lookup: {
+            from: 'BenhNhan',
+            localField: 'MaBenhNhan',
+            foreignField: 'MaBenhNhan',
+            as: 'benhNhan'
+          }
+        },
+        {
+          $lookup: {
+            from: 'BacSi',
+            localField: 'MaBacSi',
+            foreignField: 'MaBacSi',
+            as: 'bacSi'
+          }
+        },
+        { $unwind: '$benhNhan' },
+        { $unwind: '$bacSi' },
+        {
+          $project: {
+            MaLichKham: 1,
+            NgayKham: 1,
+            ChanDoan: 1,
+            GhiChu: 1,
+            TenBenhNhan: '$benhNhan.TenBenhNhan',
+            TenBacSi: '$bacSi.TenBacSi'
+          }
+        }
+      ]).toArray();
+
+      if (!info || info.length === 0) {
+        return NextResponse.json({ error: 'Không tìm thấy lịch khám' }, { status: 404 });
+      }
+      info = info[0];
+
+      chiDinh = await db.collection('ChiDinh').aggregate([
+        { $match: { MaLichKham: maLichKhamNum } },
+        {
+          $lookup: {
+            from: 'DichVu',
+            localField: 'MaDichVu',
+            foreignField: 'MaDichVu',
+            as: 'dv'
+          }
+        },
+        { $unwind: '$dv' },
+        {
+          $project: {
+            MaDichVu: 1,
+            TenDichVu: '$dv.TenDichVu',
+            SoLan: 1,
+            DonGia: '$dv.DonGia'
+          }
+        }
+      ]).toArray();
+
+      keThuoc = await db.collection('KeThuoc').aggregate([
+        { $match: { MaLichKham: maLichKhamNum } },
+        {
+          $lookup: {
+            from: 'Thuoc',
+            localField: 'MaThuoc',
+            foreignField: 'MaThuoc',
+            as: 't'
+          }
+        },
+        { $unwind: '$t' },
+        {
+          $project: {
+            MaThuoc: 1,
+            TenThuoc: '$t.TenThuoc',
+            SoLuong: 1,
+            DonGia: '$t.DonGia'
+          }
+        }
+      ]).toArray();
+    }
 
     const tongChiPhi =
-      (chiDinh.reduce((sum: number, i: any) => sum + i.SoLan * i.DonGia, 0) || 0) +
-      (keThuoc.reduce((sum: number, i: any) => sum + i.SoLuong * i.DonGia, 0) || 0);
+      (chiDinh.reduce((sum, i) => sum + (i.SoLan || 0) * (i.DonGia || 0), 0) || 0) +
+      (keThuoc.reduce((sum, i) => sum + (i.SoLuong || 0) * (i.DonGia || 0), 0) || 0);
 
+    // Tạo PDF
     const pdfDoc = await PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
 
@@ -64,20 +153,20 @@ export async function GET(
     };
 
     y = drawText(`Ngày khám: ${new Date(info.NgayKham).toLocaleDateString()}`, 50, y, page, fontSizeNormal, customFont);
-    y = drawText(`Bác sĩ: ${info.TenBacSi} - ${info.TenChuyenKhoa ?? ''}`, 50, y, page, fontSizeNormal, customFont);
+    y = drawText(`Bác sĩ: ${info.TenBacSi}`, 50, y, page, fontSizeNormal, customFont);
     y = drawText(`Bệnh nhân: ${info.TenBenhNhan}`, 50, y, page, fontSizeNormal, customFont);
     y = drawText(`Chẩn đoán: ${info.ChanDoan ?? ''}`, 50, y, page, fontSizeNormal, customFont);
     y = drawText(`Ghi chú: ${info.GhiChu ?? ''}`, 50, y, page, fontSizeNormal, customFont);
 
     y -= 10;
     y = drawText(`Danh sách chỉ định dịch vụ:`, 50, y, page, fontSizeNormal, customFont);
-    chiDinh.forEach((dv: any) => {
+    chiDinh.forEach(dv => {
       y = drawText(`- ${dv.TenDichVu}: ${dv.SoLan} lần`, 60, y, page, fontSizeNormal, customFont);
     });
 
     y -= 10;
     y = drawText(`Danh sách thuốc kê:`, 50, y, page, fontSizeNormal, customFont);
-    keThuoc.forEach((t: any) => {
+    keThuoc.forEach(t => {
       y = drawText(`- ${t.TenThuoc}: ${t.SoLuong} viên`, 60, y, page, fontSizeNormal, customFont);
     });
 

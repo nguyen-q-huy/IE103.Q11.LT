@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConnection } from '@lib/db';
+import { getMongoConnection, getMaxValue } from '@/lib/mongo';
 import sql from 'mssql';
 
 export async function POST(req: NextRequest) {
@@ -7,28 +8,51 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { hoTen, ngaySinh, gioiTinh, diaChi } = body;
 
-    if (!hoTen || !ngaySinh || !gioiTinh ) {
+    if (!hoTen || !ngaySinh || !gioiTinh) {
       return NextResponse.json({ error: 'Thiếu thông tin' }, { status: 400 });
     }
 
-    console.log("ssss")
+    const dbType = process.env.DB_TYPE || 'sqlserver';
 
-    const db = await getConnection();
-    const result = await db
-      .request()
-      .input('TenBenhNhan', sql.NVarChar(100), hoTen)
-      .input('NgaySinh', sql.Date, ngaySinh)
-      .input('GioiTinh', sql.NVarChar(10), gioiTinh)
-      .input('DiaChi', sql.NVarChar(200), diaChi)
-      .query(`
+    if (dbType === 'sqlserver') {
+      const db = await getConnection();
+      const request = db.request();
+
+      request.input('TenBenhNhan', sql.NVarChar(100), hoTen);
+      request.input('NgaySinh', sql.Date, ngaySinh);
+      request.input('GioiTinh', sql.NVarChar(10), gioiTinh);
+      request.input('DiaChi', sql.NVarChar(200), diaChi ?? null);
+
+      await request.query(`
         INSERT INTO BenhNhan (TenBenhNhan, NgaySinh, GioiTinh, DiaChi)
         VALUES (@TenBenhNhan, @NgaySinh, @GioiTinh, @DiaChi)
       `);
 
-    return NextResponse.json({ message: 'Thêm bệnh nhân thành công' });
+      return NextResponse.json({ message: 'Thêm bệnh nhân thành công' });
+    }
+
+    if (dbType === 'mongodb') {
+      const db = await getMongoConnection();
+      const maBenhNhan = await getMaxValue('BenhNhan',"MaBenhNhan");
+      const insertResult = await db.collection('BenhNhan').insertOne({
+        MaBenhNhan: maBenhNhan === null?0:maBenhNhan + 1,
+        TenBenhNhan: hoTen,
+        NgaySinh: ngaySinh,
+        GioiTinh: gioiTinh,
+        ...(diaChi && { DiaChi: diaChi }),
+      });
+
+      return NextResponse.json({
+        message: 'Thêm bệnh nhân thành công',
+        insertedId: insertResult.insertedId,
+      });
+    }
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: 'Lỗi server khi thêm bệnh nhân' }, { status: 500 });
+    console.error('Lỗi thêm bệnh nhân:', err);
+    return NextResponse.json(
+      { error: 'Lỗi server khi thêm bệnh nhân', details: err.message },
+      { status: 500 }
+    );
   }
 }
 
@@ -37,26 +61,26 @@ export async function GET(req: NextRequest) {
   search = search.trim();
 
   try {
-    const db = await getConnection();
+    const dbType = process.env.DB_TYPE || 'sqlserver';
 
-    if (!search) {
-      // Nếu search rỗng thì lấy hết
-      const result = await db
-        .request()
-        .query(`
-          SELECT * FROM BenhNhan
-          ORDER BY MaBenhNhan DESC
-        `);
-      return NextResponse.json(result.recordset);
-    } else {
-      // Có search thì lấy theo search
-      const searchLike = `%${search}%`;
+    if (dbType === 'sqlserver') {
+      const db = await getConnection();
 
-      const result = await db
-        .request()
-        .input('Search', sql.NVarChar, search)
-        .input('SearchLike', sql.NVarChar, searchLike)
-        .query(`
+      if (!search) {
+        const result = await db
+          .request()
+          .query(`
+            SELECT * FROM BenhNhan
+            ORDER BY MaBenhNhan DESC
+          `);
+        return NextResponse.json(result.recordset);
+      } else {
+        const searchLike = `%${search}%`;
+        const request = db.request();
+        request.input('Search', sql.NVarChar, search);
+        request.input('SearchLike', sql.NVarChar, searchLike);
+
+        const result = await request.query(`
           SELECT * FROM BenhNhan
           WHERE
             CAST(MaBenhNhan AS NVARCHAR) LIKE @SearchLike OR
@@ -75,10 +99,35 @@ export async function GET(req: NextRequest) {
             END,
             MaBenhNhan DESC
         `);
-      return NextResponse.json(result.recordset);
+
+        return NextResponse.json(result.recordset);
+      }
     }
-  } catch (err) {
-    console.error(err);
+
+    if (dbType === 'mongodb') {
+      const db = await getMongoConnection();
+      const filter: any = {};
+      if (search) {
+        const regex = new RegExp(search, 'i');
+        filter.$or = [
+          { MaBenhNhan: { $regex: regex } },
+          { TenBenhNhan: { $regex: regex } },
+          { DiaChi: { $regex: regex } },
+          { GioiTinh: { $regex: regex } },
+          { NgaySinh: { $regex: regex } }, // Ngày sinh lưu string hoặc ISODate
+        ];
+      }
+
+      const data = await db
+        .collection('BenhNhan')
+        .find(filter, { projection: { _id: 0 } })
+        .sort({ MaBenhNhan: -1 })
+        .toArray();
+
+      return NextResponse.json(data);
+    }
+  } catch (err: any) {
+    console.error('Lỗi lấy danh sách bệnh nhân:', err);
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
   }
 }

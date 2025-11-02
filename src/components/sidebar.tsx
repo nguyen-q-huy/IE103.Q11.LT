@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const dbType = process.env.DB_TYPE || 'mongodb';
 
   const menuItems = [
     { name: 'Danh Sách Bệnh Nhân', href: '/benhnhan' },
@@ -62,17 +63,21 @@ export default function Sidebar() {
             </li>
           );
         })}
-
-        {/* Nút Xuất JSON */}
         <li>
-          <button
-            onClick={handleExport}
-            className="w-full text-left flex items-center px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition"
-          >
-            <span className="mr-2">⬇️</span>
-            Xuất dữ liệu JSON
-          </button>
+        {/* Nút Xuất JSON */}
+        {dbType == 'sqlserver' && (
+          
+            <button
+              onClick={handleExport}
+              className="w-full text-left flex items-center px-4 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+            >
+              <span className="mr-2">⬇️</span>
+              Xuất dữ liệu JSON
+            </button>
+          
+        )}
         </li>
+
       </ul>
     </aside>
 

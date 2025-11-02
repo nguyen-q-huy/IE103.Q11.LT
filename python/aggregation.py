@@ -3,8 +3,8 @@ from datetime import datetime
 
 client = MongoClient('mongodb://localhost:27017/')
 db = client['QLBenhVien']
-lichkham = db['lichkham']
-bacsi = db['bacsi']
+lichkham = db['LichKham']
+bacsi = db['BacSi']
 
 # Define date range
 start_date = datetime(2024, 7, 1)
@@ -27,7 +27,7 @@ pipeline = [
     },
     {
         "$lookup": {
-            "from": "bacsi",
+            "from": "BacSi",
             "localField": "_id",
             "foreignField": "MaBacSi",
             "as": "bacsi_info"

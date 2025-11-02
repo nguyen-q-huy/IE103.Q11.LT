@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const db = await getConnection();
 
-    const [benhnhan, bacsi, loaidichvu, dichvu, thuoc, lichkham, kethuocthuoc, chidinh] = await Promise.all([
+    const [benhnhan, bacsi, loaidichvu, dichvu, thuoc, lichkham, kethuoc, chidinh] = await Promise.all([
       db.request().query('SELECT * FROM BenhNhan'),
       db.request().query('SELECT * FROM BacSi'),
       db.request().query('SELECT * FROM LoaiDichVu'),
@@ -23,14 +23,14 @@ export async function GET() {
     }));
 
     const data = {
-      benhnhan: benhnhan.recordset,
-      bacsi: bacsi.recordset,
-      loaidichvu: loaidichvu.recordset,
-      dichvu: dichvu.recordset,
-      thuoc: thuoc.recordset,
-      lichkham: lichkhamConverted,
-      kethuocthuoc: kethuocthuoc.recordset,
-      chidinh: chidinh.recordset,
+      BenhNhan: benhnhan.recordset,
+      BacSi: bacsi.recordset,
+      LoaiDichVu: loaidichvu.recordset,
+      DichVu: dichvu.recordset,
+      Thuoc: thuoc.recordset,
+      LichKham: lichkhamConverted,
+      KeThuoc: kethuoc.recordset,
+      ChiDinh: chidinh.recordset,
     };
 
     return NextResponse.json(data);
